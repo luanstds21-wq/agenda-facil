@@ -260,7 +260,7 @@ export default function App() {
         
         let profile: UserProfile;
         if (!userDoc.exists()) {
-          const isAdmin = user.email === 'luanstds21@gmail.com';
+          const isAdmin = user.email === 'pontelikes14@gmail.com';
           profile = {
             uid: user.uid,
             displayName: user.displayName,
@@ -271,6 +271,11 @@ export default function App() {
           await setDoc(userRef, profile);
         } else {
           profile = userDoc.data() as UserProfile;
+          // Security layer: Force admin role if email matches the hardcoded admin
+          if (user.email === 'pontelikes14@gmail.com' && profile.role !== 'admin') {
+            profile.role = 'admin';
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+          }
         }
         setUserProfile(profile);
       } else {
@@ -313,7 +318,7 @@ export default function App() {
         
         // Finalize profile creation (already handled by onAuthStateChanged but we can force update here if needed)
         const userRef = doc(db, 'users', userCredential.user.uid);
-        const isAdmin = email === 'luanstds21@gmail.com';
+        const isAdmin = email === 'pontelikes14@gmail.com';
         await setDoc(userRef, {
           uid: userCredential.user.uid,
           displayName: displayName,
@@ -502,12 +507,14 @@ export default function App() {
             <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')}>Painel Geral</NavButton>
             <NavButton active={activeTab === 'catalog'} onClick={() => setActiveTab('catalog')}>Serviços</NavButton>
             <NavButton active={activeTab === 'booking'} onClick={() => setActiveTab('booking')}>Agendamentos</NavButton>
-            <button 
-              onClick={() => setActiveTab('admin')}
-              className="ml-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-brand-text-muted hover:text-brand-primary transition-colors border border-transparent hover:border-brand-border rounded-lg"
-            >
-              Admin
-            </button>
+            {userProfile?.role === 'admin' && (
+              <button 
+                onClick={() => setActiveTab('admin')}
+                className="ml-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-brand-text-muted hover:text-brand-primary transition-colors border border-transparent hover:border-brand-border rounded-lg"
+              >
+                Admin
+              </button>
+            )}
           </div>
 
           <div className="hidden md:flex items-center gap-4 pl-8 border-l border-brand-border">
@@ -547,6 +554,9 @@ export default function App() {
               <MobileNavButton active={activeTab === 'home'} onClick={() => { setActiveTab('home'); setIsMenuOpen(false); }}>Início</MobileNavButton>
               <MobileNavButton active={activeTab === 'catalog'} onClick={() => { setActiveTab('catalog'); setIsMenuOpen(false); }}>Serviços</MobileNavButton>
               <MobileNavButton active={activeTab === 'booking'} onClick={() => { setActiveTab('booking'); setIsMenuOpen(false); }}>Agendar</MobileNavButton>
+              {userProfile?.role === 'admin' && (
+                <MobileNavButton active={activeTab === 'admin'} onClick={() => { setActiveTab('admin'); setIsMenuOpen(false); }}>Painel Admin</MobileNavButton>
+              )}
             </div>
           </motion.div>
         )}
