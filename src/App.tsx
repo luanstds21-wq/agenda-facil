@@ -39,8 +39,9 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   onAuthStateChanged, 
   signOut, 
   User as FirebaseUser 
@@ -149,6 +150,11 @@ interface UserProfile {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'catalog' | 'booking' | 'admin'>('home');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [services, setServices] = useState<Service[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -297,12 +303,33 @@ export default function App() {
     return () => unsubscribeAppts();
   }, [user, userProfile]);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
     try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login error:", error);
+      if (authMode === 'register') {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName });
+        
+        // Finalize profile creation (already handled by onAuthStateChanged but we can force update here if needed)
+        const userRef = doc(db, 'users', userCredential.user.uid);
+        const isAdmin = email === 'luanstds21@gmail.com';
+        await setDoc(userRef, {
+          uid: userCredential.user.uid,
+          displayName: displayName,
+          email: email,
+          role: isAdmin ? 'admin' : 'client',
+          photoURL: null
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error: any) {
+      console.error("Auth error:", error);
+      if (error.code === 'auth/invalid-credential') setErrorMsg('E-mail ou senha incorretos.');
+      else if (error.code === 'auth/email-already-in-use') setErrorMsg('Este e-mail já está em uso.');
+      else if (error.code === 'auth/weak-password') setErrorMsg('A senha deve ter pelo menos 6 caracteres.');
+      else setErrorMsg('Erro na autenticação. Verifique se o provedor está ativo no console do Firebase.');
     }
   };
 
@@ -373,22 +400,81 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-md w-full bg-white p-10 rounded-3xl shadow-xl text-center space-y-8"
+            className="max-w-md w-full bg-white p-10 rounded-3xl shadow-xl space-y-8"
           >
             <div className="w-20 h-20 bg-brand-secondary rounded-2xl flex items-center justify-center mx-auto text-brand-primary">
               <Sparkles size={40} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <h1 className="text-3xl font-bold text-brand-text-dark">Agenda Fácil</h1>
-              <p className="text-brand-text-muted">Entre para gerenciar seus agendamentos.</p>
+              <p className="text-brand-text-muted">{authMode === 'login' ? 'Bem-vindo de volta!' : 'Crie sua conta no salão'}</p>
             </div>
-            <button 
-              onClick={handleLogin}
-              className="w-full bg-brand-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:brightness-110 transition-all shadow-lg shadow-brand-primary/20"
-            >
-              <img src="https://www.google.com/favicon.ico" className="w-5 h-5 invert" alt="G" />
-              Entrar com Google
-            </button>
+
+            <form onSubmit={handleAuth} className="space-y-4">
+              {authMode === 'register' && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted px-1">Nome Completo</label>
+                  <input 
+                    required
+                    type="text"
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 outline-none focus:border-brand-primary text-sm font-medium"
+                    placeholder="Seu nome"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted px-1">E-mail</label>
+                <input 
+                  required
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 outline-none focus:border-brand-primary text-sm font-medium"
+                  placeholder="exemplo@email.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted px-1">Senha</label>
+                <input 
+                  required
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 outline-none focus:border-brand-primary text-sm font-medium"
+                  placeholder="••••••••"
+                />
+                {authMode === 'register' && <p className="text-[10px] text-brand-text-muted mt-1 px-1 italic">* Mínimo 6 caracteres</p>}
+              </div>
+
+              {errorMsg && (
+                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-100 flex items-center gap-2">
+                  <AlertCircle size={14} /> {errorMsg}
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                className="w-full bg-brand-primary text-white py-4 rounded-xl font-bold hover:scale-[1.02] transition-all shadow-lg shadow-brand-primary/20"
+              >
+                {authMode === 'login' ? 'Entrar' : 'Cadastrar'}
+              </button>
+            </form>
+
+            <div className="pt-4 border-t border-brand-border text-center">
+              <button 
+                onClick={() => {
+                  setAuthMode(authMode === 'login' ? 'register' : 'login');
+                  setErrorMsg('');
+                }}
+                className="text-xs font-bold text-brand-text-muted hover:text-brand-primary transition-colors"
+              >
+                {authMode === 'login' 
+                  ? 'Não tem conta? Cadastre-se' 
+                  : 'Já tem conta? Faça Login'}
+              </button>
+            </div>
           </motion.div>
         </div>
       </ErrorBoundary>
