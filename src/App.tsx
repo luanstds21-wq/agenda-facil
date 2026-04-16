@@ -1050,17 +1050,49 @@ function BookingForm({ onBook, services, professionals, appointments, blockedSlo
             </select>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 md:col-span-2">
             <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Profissional</label>
-            <select 
-              required
-              className="w-full bg-brand-bg border-brand-border rounded-xl px-4 py-4 outline-none border text-sm appearance-none font-medium cursor-pointer"
-              value={formData.professionalId}
-              onChange={e => setFormData({ ...formData, professionalId: e.target.value })}
-            >
-              <option value="">Escolha um especialista...</option>
-              {filteredProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {filteredProfessionals.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, professionalId: p.id, time: '' })}
+                  className={cn(
+                    "flex flex-col items-center p-4 rounded-2xl border transition-all space-y-3",
+                    formData.professionalId === p.id 
+                      ? "bg-brand-secondary border-brand-primary shadow-md scale-105" 
+                      : "bg-brand-bg border-brand-border hover:border-brand-primary/50"
+                  )}
+                >
+                  <div className="relative">
+                    <img 
+                      src={p.photoUrl} 
+                      className="w-16 h-16 rounded-2xl object-cover shadow-sm" 
+                      alt={p.name} 
+                      referrerPolicy="no-referrer"
+                    />
+                    {formData.professionalId === p.id && (
+                      <div className="absolute -top-1 -right-1 bg-brand-primary text-white p-1 rounded-full border-2 border-white">
+                        <CheckCircle2 size={12} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-brand-text-dark leading-tight">{p.name}</p>
+                    <p className="text-[8px] text-brand-text-muted uppercase font-bold tracking-widest mt-1">Especialista</p>
+                  </div>
+                </button>
+              ))}
+              {filteredProfessionals.length === 0 && formData.serviceId && (
+                <div className="col-span-full p-4 bg-brand-secondary/30 rounded-xl text-center text-xs text-brand-text-muted italic">
+                  Nenhum profissional disponível para este serviço no momento.
+                </div>
+              )}
+            </div>
+            {!formData.serviceId && (
+              <p className="text-[10px] text-brand-text-muted text-center pt-2">Selecione um serviço primeiro para ver os especialistas disponíveis.</p>
+            )}
           </div>
         </div>
         
