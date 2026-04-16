@@ -35,6 +35,7 @@ import {
   serverTimestamp, 
   setDoc, 
   getDoc,
+  getDocs,
   deleteDoc,
   Timestamp
 } from 'firebase/firestore';
@@ -133,11 +134,47 @@ interface Appointment {
   id: string;
   customerName: string;
   serviceId: string;
+  serviceName?: string;
+  professionalId: string;
+  professionalName?: string;
   date: string;
   time: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   uid: string;
   createdAt: any;
+}
+
+interface Professional {
+  id: string;
+  name: string;
+  photoUrl: string;
+  serviceIds: string[];
+}
+
+interface SalonInfo {
+  address: string;
+  phone: string;
+  instagram: string;
+}
+
+interface BlockedSlot {
+  id: string;
+  date: string;
+  time: string;
+  professionalId: string;
+}
+
+interface OccupiedSlot {
+  id: string;
+  date: string;
+  time: string;
+  professionalId: string;
+  appointmentId: string;
+}
+
+interface AppConfig {
+  availableDays: number[];
+  availableHours: string[];
 }
 
 interface UserProfile {
@@ -156,7 +193,19 @@ export default function App() {
   const [displayName, setDisplayName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [services, setServices] = useState<Service[]>([]);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [config, setConfig] = useState<AppConfig>({
+    availableDays: [1, 2, 3, 4, 5, 6], // Seg a Sáb
+    availableHours: ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00']
+  });
+  const [salonInfo, setSalonInfo] = useState<SalonInfo>({
+    address: 'Rua das Flores, 123 - Centro, São Paulo, SP',
+    phone: '(11) 98765-4321',
+    instagram: '@agenda_facil'
+  });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
+  const [occupiedSlots, setOccupiedSlots] = useState<OccupiedSlot[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -164,13 +213,13 @@ export default function App() {
 
   useEffect(() => {
     // Services listener
-    // Seeding logic for initial services
+    // Seeding logic for initial services, professionals and config
     const seedServices = async () => {
+      // 1. Services Seed
       const servicesRef = collection(db, 'services');
-      const q = query(servicesRef);
-      const snapshot = await getDoc(doc(db, 'settings', 'seeded'));
+      const serviceSnapshot = await getDoc(doc(db, 'settings', 'seeded_v2')); // Newer seed flag
       
-      if (!snapshot.exists()) {
+      if (!serviceSnapshot.exists()) {
         const initialServices = [
           {
             name: 'Corte Feminino Premium',
@@ -180,50 +229,50 @@ export default function App() {
             description: 'Corte estilizado com visagismo, lavagem relaxante e finalização com escova.'
           },
           {
-            name: 'Coloração & Mechas',
-            price: 'R$ 250',
-            duration: '180 min',
-            photoUrl: 'https://images.unsplash.com/photo-1560869713-7d0a294308d3?q=80&w=800&auto=format&fit=crop',
-            description: 'Transformação completa de cor com produtos importados e proteção da fibra capilar.'
-          },
-          {
             name: 'Manicure e Pedicure Spa',
             price: 'R$ 90',
             duration: '90 min',
             photoUrl: 'https://images.unsplash.com/photo-1632345033849-5461281483ee?q=80&w=800&auto=format&fit=crop',
             description: 'Cuidado completo das unhas com esmaltação premium e massagem relaxante.'
-          },
-          {
-            name: 'Escova Modeladora',
-            price: 'R$ 70',
-            duration: '45 min',
-            photoUrl: 'https://images.unsplash.com/photo-1522336572468-97b06e8ef143?q=80&w=800&auto=format&fit=crop',
-            description: 'O acabamento perfeito para qualquer ocasião. Brilho intenso e movimento.'
-          },
-          {
-            name: 'Maquiagem Social',
-            price: 'R$ 180',
-            duration: '60 min',
-            photoUrl: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?q=80&w=800&auto=format&fit=crop',
-            description: 'Maquiagem profissional para eventos, realçando sua beleza natural com durabilidade.'
-          },
-          {
-            name: 'Hidratação Profunda',
-            price: 'R$ 100',
-            duration: '40 min',
-            photoUrl: 'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?q=80&w=800&auto=format&fit=crop',
-            description: 'Tratamento intensivo para recuperação de brilho e maciez dos fios.'
           }
         ];
 
         for (const service of initialServices) {
           await addDoc(servicesRef, service);
         }
-        await setDoc(doc(db, 'settings', 'seeded'), { done: true });
+
+        // 2. Professionals Seed
+        const prosRef = collection(db, 'professionals');
+        const initialPros = [
+          { name: 'Ana Silva', role: 'Cabeleireira Especialista', photoUrl: 'https://images.unsplash.com/photo-1595959183082-a8a64937c2ff?q=80&w=400&fit=crop' },
+          { name: 'Maria Santos', role: 'Manicure & Nail Designer', photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400&fit=crop' },
+          { name: 'Julia Costa', role: 'Esteticista & Maquiadora', photoUrl: 'https://images.unsplash.com/photo-1554151228-14d9def656e4?q=80&w=400&fit=crop' }
+        ];
+        for (const pro of initialPros) {
+          await addDoc(prosRef, pro);
+        }
+
+        // 3. Config Seed
+        const configRef = doc(db, 'settings', 'availability');
+        await setDoc(configRef, {
+          availableDays: [1, 2, 3, 4, 5, 6],
+          availableHours: ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00']
+        });
+
+        // 4. Salon Info Seed
+        const infoRef = doc(db, 'settings', 'info');
+        await setDoc(infoRef, {
+          address: 'Rua das Flores, 123 - Centro, São Paulo, SP',
+          phone: '(11) 98765-4321',
+          instagram: '@agenda_facil'
+        });
+
+        await setDoc(doc(db, 'settings', 'seeded_v2'), { done: true });
       }
     };
     seedServices();
 
+    // Listeners
     const unsubscribeServices = onSnapshot(collection(db, 'services'), (snapshot) => {
       const servicesData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -232,7 +281,50 @@ export default function App() {
       setServices(servicesData);
     });
 
-    return () => unsubscribeServices();
+    const unsubscribePros = onSnapshot(collection(db, 'professionals'), (snapshot) => {
+      const prosData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Professional[];
+      setProfessionals(prosData);
+    });
+
+    const unsubscribeConfig = onSnapshot(doc(db, 'settings', 'availability'), (doc) => {
+      if (doc.exists()) {
+        setConfig(doc.data() as AppConfig);
+      }
+    });
+
+    const unsubscribeInfo = onSnapshot(doc(db, 'settings', 'info'), (doc) => {
+      if (doc.exists()) {
+        setSalonInfo(doc.data() as SalonInfo);
+      }
+    });
+
+    const unsubscribeBlocked = onSnapshot(collection(db, 'blocked_slots'), (snapshot) => {
+      const blockedData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as BlockedSlot[];
+      setBlockedSlots(blockedData);
+    });
+
+    const unsubscribeOccupied = onSnapshot(collection(db, 'occupied_slots'), (snapshot) => {
+      const occupiedData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as OccupiedSlot[];
+      setOccupiedSlots(occupiedData);
+    });
+
+    return () => {
+      unsubscribeServices();
+      unsubscribePros();
+      unsubscribeConfig();
+      unsubscribeInfo();
+      unsubscribeBlocked();
+      unsubscribeOccupied();
+    };
   }, []);
 
   useEffect(() => {
@@ -341,19 +433,25 @@ export default function App() {
   const handleLogout = () => signOut(auth);
 
   const handleBook = async (data: Omit<Appointment, 'id' | 'status' | 'uid' | 'createdAt'>) => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
+    if (!user) return;
 
     const path = 'appointments';
     try {
-      await addDoc(collection(db, path), {
+      const docRef = await addDoc(collection(db, path), {
         ...data,
         status: 'scheduled',
         uid: user.uid,
         createdAt: serverTimestamp()
       });
+
+      // Create a public occupied slot reference
+      await addDoc(collection(db, 'occupied_slots'), {
+        date: data.date,
+        time: data.time,
+        professionalId: data.professionalId,
+        appointmentId: docRef.id
+      });
+
       setActiveTab('home');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
@@ -365,6 +463,15 @@ export default function App() {
     const ref = doc(db, 'appointments', id);
     try {
       await updateDoc(ref, { status });
+
+      // If cancelled, remove from occupied_slots
+      if (status === 'cancelled') {
+        const q = query(collection(db, 'occupied_slots'), where('appointmentId', '==', id));
+        const occupiedSnapshot = await getDocs(q);
+        occupiedSnapshot.forEach(async (d) => {
+          await deleteDoc(doc(db, 'occupied_slots', d.id));
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
     }
@@ -584,14 +691,26 @@ export default function App() {
           )}
           {activeTab === 'booking' && (
             <motion.div key="booking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <BookingForm onBook={handleBook} services={services} />
+              <BookingForm 
+                onBook={handleBook} 
+                services={services} 
+                professionals={professionals}
+                appointments={appointments}
+                blockedSlots={blockedSlots}
+                occupiedSlots={occupiedSlots}
+                config={config}
+              />
             </motion.div>
           )}
           {activeTab === 'admin' && (
             <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <AdminView 
                 appointments={appointments}
+                blockedSlots={blockedSlots}
                 services={services}
+                professionals={professionals}
+                config={config}
+                salonInfo={salonInfo}
                 onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
                 onAddService={handleAddService}
                 onDeleteService={handleDeleteService}
@@ -611,18 +730,18 @@ export default function App() {
             <h4 className="text-white text-sm uppercase tracking-widest font-sans font-semibold">Localização</h4>
             <div className="flex items-start gap-2 text-sm">
               <MapPin size={18} className="shrink-0" />
-              <span>Rua das Flores, 123 - Centro<br />São Paulo, SP</span>
+              <span>{salonInfo.address}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Phone size={18} />
-              <span>(11) 98765-4321</span>
+              <span>{salonInfo.phone}</span>
             </div>
           </div>
           <div className="space-y-4">
             <h4 className="text-white text-sm uppercase tracking-widest font-sans font-semibold">Social</h4>
             <a href="#" className="flex items-center gap-2 hover:text-white transition-colors">
               <Instagram size={18} />
-              <span>@espaco_glow</span>
+              <span>{salonInfo.instagram}</span>
             </a>
           </div>
         </div>
@@ -816,13 +935,74 @@ function CatalogView({ services, onSelect }: { services: Service[], onSelect: (s
   );
 }
 
-function BookingForm({ onBook, services }: { onBook: (a: any) => void, services: Service[] }) {
+function BookingForm({ onBook, services, professionals, appointments, blockedSlots, occupiedSlots, config }: { 
+  onBook: (a: any) => void, 
+  services: Service[],
+  professionals: Professional[],
+  appointments: Appointment[],
+  blockedSlots: BlockedSlot[],
+  occupiedSlots: OccupiedSlot[],
+  config: AppConfig
+}) {
   const [formData, setFormData] = useState({
     customerName: auth.currentUser?.displayName || '',
     serviceId: '',
+    professionalId: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: ''
   });
+
+  // Filter professionals by selected service
+  const filteredProfessionals = professionals.filter(p => 
+    !formData.serviceId || (p.serviceIds && p.serviceIds.includes(formData.serviceId))
+  );
+
+  // Calculate available slots
+  const getAvailableSlots = () => {
+    if (!formData.date || !formData.professionalId) return [];
+    
+    const now = new Date();
+    const isToday = formData.date === format(now, 'yyyy-MM-dd');
+    const currentTime = format(now, 'HH:mm');
+
+    const dayOfWeek = parseISO(formData.date).getDay();
+    if (!config.availableDays.includes(dayOfWeek)) return [];
+
+    return config.availableHours.filter(slot => {
+      // Check if slot is in the past today
+      if (isToday && slot <= currentTime) return false;
+
+      // Check if slot is taken by ANY appointment via occupiedSlots
+      const isTakenByOthers = occupiedSlots.some(os => 
+        os.date === formData.date && 
+        os.time === slot && 
+        os.professionalId === formData.professionalId
+      );
+
+      // Check if slot is blocked by admin
+      const isBlocked = blockedSlots.some(bs => 
+        bs.date === formData.date && 
+        bs.time === slot && 
+        bs.professionalId === formData.professionalId
+      );
+
+      return !isTakenByOthers && !isBlocked;
+    });
+  };
+
+  const availableSlots = getAvailableSlots();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const service = services.find(s => s.id === formData.serviceId);
+    const pro = professionals.find(p => p.id === formData.professionalId);
+    
+    onBook({
+      ...formData,
+      serviceName: service?.name,
+      professionalName: pro?.name
+    });
+  };
 
   return (
     <motion.div 
@@ -835,7 +1015,7 @@ function BookingForm({ onBook, services }: { onBook: (a: any) => void, services:
         <p className="text-brand-text-muted text-sm mt-1 font-medium">Escolha seu momento de brilhar.</p>
       </div>
 
-      <form className="space-y-8" onSubmit={(e) => { e.preventDefault(); onBook(formData); }}>
+      <form className="space-y-8" onSubmit={handleSubmit}>
         <div className="space-y-3">
           <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Seu Nome</label>
           <input 
@@ -860,44 +1040,66 @@ function BookingForm({ onBook, services }: { onBook: (a: any) => void, services:
               {services.map(s => <option key={s.id} value={s.id}>{s.name} - {s.price}</option>)}
             </select>
           </div>
-          
+
           <div className="space-y-3">
-            <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Data</label>
-            <input 
+            <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Profissional</label>
+            <select 
               required
-              type="date"
-              min={format(new Date(), 'yyyy-MM-dd')}
-              className="w-full bg-brand-bg border-brand-border rounded-xl px-4 py-4 outline-none border text-sm font-medium"
-              value={formData.date}
-              onChange={e => setFormData({ ...formData, date: e.target.value })}
-            />
+              className="w-full bg-brand-bg border-brand-border rounded-xl px-4 py-4 outline-none border text-sm appearance-none font-medium cursor-pointer"
+              value={formData.professionalId}
+              onChange={e => setFormData({ ...formData, professionalId: e.target.value })}
+            >
+              <option value="">Escolha um especialista...</option>
+              {filteredProfessionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
+        </div>
+        
+        <div className="space-y-3">
+          <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Data</label>
+          <input 
+            required
+            type="date"
+            min={format(new Date(), 'yyyy-MM-dd')}
+            className="w-full bg-brand-bg border-brand-border rounded-xl px-4 py-4 outline-none border text-sm font-medium"
+            value={formData.date}
+            onChange={e => {
+              setFormData({ ...formData, date: e.target.value, time: '' });
+            }}
+          />
         </div>
 
         <div className="space-y-4">
           <label className="text-[10px] uppercase tracking-[2px] font-extrabold text-brand-text-muted">Horários Disponíveis</label>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-            {['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'].map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setFormData({ ...formData, time: t })}
-                className={cn(
-                  "py-3 rounded-lg text-xs font-bold transition-all border",
-                  formData.time === t 
-                    ? "bg-brand-primary text-white border-brand-primary shadow-xl shadow-brand-primary/20 scale-105" 
-                    : "bg-white text-stone-600 border-brand-border hover:border-brand-primary hover:text-brand-primary"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {!formData.professionalId ? (
+            <div className="p-4 bg-brand-secondary/30 rounded-xl text-center text-xs text-brand-text-muted">Selecione um profissional para ver os horários</div>
+          ) : availableSlots.length > 0 ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {availableSlots.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, time: t })}
+                  className={cn(
+                    "py-3 rounded-lg text-xs font-bold transition-all border",
+                    formData.time === t 
+                      ? "bg-brand-primary text-white border-brand-primary shadow-xl shadow-brand-primary/20 scale-105" 
+                      : "bg-white text-stone-600 border-brand-border hover:border-brand-primary hover:text-brand-primary"
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : (
+             <div className="p-4 bg-red-50 text-red-500 rounded-xl text-center text-xs border border-red-100 italic">Sem horários disponíveis para este dia.</div>
+          )}
         </div>
 
         <button 
           type="submit"
-          className="w-full bg-brand-primary text-white py-5 rounded-2xl font-bold text-xs tracking-[4px] uppercase hover:scale-[1.01] active:scale-[0.99] transition-all mt-6 shadow-2xl shadow-brand-primary/30"
+          disabled={!formData.time}
+          className="w-full bg-brand-primary text-white py-5 rounded-2xl font-bold text-xs tracking-[4px] uppercase hover:scale-[1.01] active:scale-[0.99] transition-all mt-6 shadow-2xl shadow-brand-primary/30 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
           Confirmar Reserva
         </button>
@@ -908,18 +1110,26 @@ function BookingForm({ onBook, services }: { onBook: (a: any) => void, services:
 
 function AdminView({ 
   appointments, 
+  blockedSlots,
   services,
+  professionals,
+  config,
+  salonInfo,
   onUpdateAppointmentStatus,
   onAddService,
   onDeleteService
 }: { 
   appointments: Appointment[],
+  blockedSlots: BlockedSlot[],
   services: Service[],
+  professionals: Professional[],
+  config: AppConfig,
+  salonInfo: SalonInfo,
   onUpdateAppointmentStatus: (id: string, s: Appointment['status']) => void,
   onAddService: (s: any) => void,
   onDeleteService: (id: string) => void
 }) {
-  const [activeSection, setActiveSection] = useState<'calendar' | 'services' | 'stats'>('calendar');
+  const [activeSection, setActiveSection] = useState<'calendar' | 'services' | 'professionals' | 'settings' | 'stats'>('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // Metrics
@@ -937,17 +1147,19 @@ function AdminView({
           <h2 className="text-3xl font-bold text-brand-text-dark tracking-tighter">Painel do Salão</h2>
           <p className="text-brand-text-muted text-sm font-medium">Interface administrativa de alta performance.</p>
         </div>
-        <div className="flex bg-white p-1 rounded-2xl border border-brand-border shadow-sm">
+        <div className="flex bg-white p-1 rounded-2xl border border-brand-border shadow-sm overflow-x-auto no-scrollbar">
           {[
             { id: 'calendar', label: 'Agenda', icon: <Calendar size={14} /> },
             { id: 'services', label: 'Serviços', icon: <Scissors size={14} /> },
+            { id: 'professionals', label: 'Equipe', icon: <Users size={14} /> },
+            { id: 'settings', label: 'Horários/Contato', icon: <Clock size={14} /> },
             { id: 'stats', label: 'Dashboard', icon: <Sparkles size={14} /> }
           ].map(tab => (
             <button 
               key={tab.id}
               onClick={() => setActiveSection(tab.id as any)}
               className={cn(
-                "px-5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all flex items-center gap-2",
+                "px-5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all flex items-center gap-2 whitespace-nowrap",
                 activeSection === tab.id ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20" : "text-brand-text-muted hover:bg-brand-secondary/50"
               )}
             >
@@ -962,7 +1174,10 @@ function AdminView({
           <motion.div key="cal" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
             <CalendarSection 
               appointments={appointments} 
+              blockedSlots={blockedSlots}
               services={services} 
+              professionals={professionals}
+              config={config}
               onUpdateStatus={onUpdateAppointmentStatus} 
               currentDate={currentDate}
               setCurrentDate={setCurrentDate}
@@ -974,12 +1189,22 @@ function AdminView({
             <ServiceManager services={services} onAdd={onAddService} onDelete={onDeleteService} />
           </motion.div>
         )}
+        {activeSection === 'professionals' && (
+          <motion.div key="pro" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <ProfessionalManager professionals={professionals} services={services} />
+          </motion.div>
+        )}
+        {activeSection === 'settings' && (
+          <motion.div key="set" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <AvailabilityManager config={config} salonInfo={salonInfo} />
+          </motion.div>
+        )}
         {activeSection === 'stats' && (
           <motion.div key="sta" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <DashboardStat title="Receita Hoje" value={`R$ ${totalRevenue}`} subtitle="Total processado" icon={<Sparkles className="text-brand-primary" />} />
               <DashboardStat title="Agendamentos" value={todayAppts.length.toString()} subtitle="Para hoje" icon={<Users className="text-blue-500" />} />
-              <DashboardStat title="Capacidade" value={`${Math.min(100, (todayAppts.length * 10))}%`} subtitle="Ocupação da agenda" icon={<Clock className="text-amber-500" />} />
+              <DashboardStat title="Capacidade" value={`${Math.min(100, (todayAppts.length * (10 / (professionals.length || 1))))}%`} subtitle="Ocupação da agenda" icon={<Clock className="text-amber-500" />} />
               <DashboardStat title="Cancelamentos" value={appointments.filter(a => a.status === 'cancelled').length.toString()} subtitle="Histórico total" icon={<X className="text-brand-accent" />} />
             </div>
           </motion.div>
@@ -989,15 +1214,230 @@ function AdminView({
   );
 }
 
+function ProfessionalManager({ professionals, services }: { professionals: Professional[], services: Service[] }) {
+  const [name, setName] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+
+  const toggleService = (id: string) => {
+    setSelectedServiceIds(prev => 
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !photoUrl || selectedServiceIds.length === 0) return;
+    try {
+      await addDoc(collection(db, 'professionals'), { 
+        name, 
+        photoUrl, 
+        serviceIds: selectedServiceIds 
+      });
+      setName(''); setPhotoUrl(''); setSelectedServiceIds([]);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'professionals', id));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white p-8 rounded-3xl border border-brand-border shadow-sm">
+        <h3 className="text-xl font-bold text-brand-text-dark mb-6 flex items-center gap-2">
+          <Plus size={20} className="text-brand-primary" />
+          Adicionar Novo Profissional
+        </h3>
+        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input label="Nome do Profissional" value={name} onChange={setName} placeholder="Ex: Ana Silva" />
+          <Input label="URL da Foto" value={photoUrl} onChange={setPhotoUrl} placeholder="URL da foto (Unsplash, etc)" />
+          <div className="md:col-span-2 space-y-3">
+            <label className="text-[9px] uppercase tracking-[2px] font-extrabold text-brand-text-muted block">Serviços que Realiza</label>
+            <div className="flex flex-wrap gap-2">
+              {services.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleService(s.id)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all border",
+                    selectedServiceIds.includes(s.id) ? "bg-brand-primary text-white border-brand-primary" : "bg-brand-bg text-brand-text-muted border-brand-border"
+                  )}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" className="w-full bg-brand-primary text-white py-4 rounded-xl font-bold hover:scale-[1.01] transition-all">
+              Salvar Profissional
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {professionals.map(pro => (
+          <div key={pro.id} className="bg-white p-6 rounded-3xl border border-brand-border shadow-sm flex items-center gap-4 relative group">
+            <img src={pro.photoUrl} alt={pro.name} className="w-16 h-16 rounded-2xl object-cover" />
+            <div>
+              <h4 className="font-bold text-brand-text-dark">{pro.name}</h4>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {pro.serviceIds?.map(sid => {
+                  const s = services.find(sv => sv.id === sid);
+                  return s ? <span key={sid} className="text-[8px] bg-brand-secondary px-1.5 py-0.5 rounded text-brand-primary font-bold uppercase">{s.name}</span> : null;
+                })}
+              </div>
+            </div>
+            <button 
+              onClick={() => handleDelete(pro.id)}
+              className="absolute top-4 right-4 p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AvailabilityManager({ config, salonInfo }: { config: AppConfig, salonInfo: SalonInfo }) {
+  const [info, setInfo] = useState(salonInfo);
+  const days = [
+    { id: 0, label: 'Dom' },
+    { id: 1, label: 'Seg' },
+    { id: 2, label: 'Ter' },
+    { id: 3, label: 'Qua' },
+    { id: 4, label: 'Qui' },
+    { id: 5, label: 'Sex' },
+    { id: 6, label: 'Sáb' }
+  ];
+
+  const handleUpdateInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await setDoc(doc(db, 'settings', 'info'), info);
+  };
+
+  const handleToggleDay = async (dayId: number) => {
+    const isAvailable = config.availableDays.includes(dayId);
+    const newDays = isAvailable 
+      ? config.availableDays.filter(d => d !== dayId)
+      : [...config.availableDays, dayId].sort();
+    
+    await setDoc(doc(db, 'settings', 'availability'), { ...config, availableDays: newDays }, { merge: true });
+  };
+
+  const [newTime, setNewTime] = useState('');
+  const handleAddTime = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTime || config.availableHours.includes(newTime)) return;
+    const newHours = [...config.availableHours, newTime].sort();
+    await setDoc(doc(db, 'settings', 'availability'), { ...config, availableHours: newHours }, { merge: true });
+    setNewTime('');
+  };
+
+  const handleRemoveTime = async (time: string) => {
+    const newHours = config.availableHours.filter(t => t !== time);
+    await setDoc(doc(db, 'settings', 'availability'), { ...config, availableHours: newHours }, { merge: true });
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white p-8 rounded-3xl border border-brand-border shadow-sm">
+        <h3 className="text-xl font-bold text-brand-text-dark mb-6 flex items-center gap-2">
+          <MapPin size={20} className="text-brand-primary" />
+          Informações do Rodapé
+        </h3>
+        <form onSubmit={handleUpdateInfo} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Input label="Endereço Completo" value={info.address} onChange={v => setInfo({...info, address: v})} placeholder="Ex: Rua das Flores, 123..." />
+          <Input label="Telefone / WhatsApp" value={info.phone} onChange={v => setInfo({...info, phone: v})} placeholder="Ex: (11) 98765-4321" />
+          <Input label="Instagram" value={info.instagram} onChange={v => setInfo({...info, instagram: v})} placeholder="Ex: @agenda_facil" />
+          <div className="md:col-span-3">
+             <button type="submit" className="w-full bg-stone-900 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-all">Atualizar Contatos</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-3xl border border-brand-border shadow-sm">
+          <h3 className="text-xl font-bold text-brand-text-dark mb-6 flex items-center gap-2">
+            <Calendar size={20} className="text-brand-primary" />
+            Dias de Atendimento
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {days.map(day => (
+              <button 
+                key={day.id}
+                onClick={() => handleToggleDay(day.id)}
+                className={cn(
+                  "px-5 py-3 rounded-xl font-bold transition-all border",
+                  config.availableDays.includes(day.id)
+                    ? "bg-brand-primary text-white border-brand-primary"
+                    : "bg-brand-bg text-brand-text-muted border-brand-border"
+                )}
+              >
+                {day.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-3xl border border-brand-border shadow-sm">
+          <h3 className="text-xl font-bold text-brand-text-dark mb-6 flex items-center gap-2">
+            <Clock size={20} className="text-brand-primary" />
+            Grade de Horários
+          </h3>
+          <form onSubmit={handleAddTime} className="flex gap-2 mb-6">
+            <input 
+              type="time" 
+              value={newTime} 
+              onChange={e => setNewTime(e.target.value)}
+              className="flex-1 bg-brand-bg border border-brand-border rounded-xl px-4 py-2 outline-none"
+            />
+            <button type="submit" className="p-3 bg-brand-primary text-white rounded-xl font-bold">
+              <Plus size={20} />
+            </button>
+          </form>
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+            {config.availableHours.map(time => (
+              <div key={time} className="bg-brand-bg p-2 rounded-lg border border-brand-border flex items-center justify-between">
+                <span className="text-xs font-bold text-brand-text-dark">{time}</span>
+                <button onClick={() => handleRemoveTime(time)} className="text-red-400 hover:text-red-600">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CalendarSection({ 
   appointments, 
+  blockedSlots,
   services, 
+  professionals,
+  config,
   onUpdateStatus,
   currentDate,
   setCurrentDate
 }: { 
   appointments: Appointment[], 
+  blockedSlots: BlockedSlot[],
   services: Service[], 
+  professionals: Professional[],
+  config: AppConfig,
   onUpdateStatus: (id: string, s: any) => void,
   currentDate: Date,
   setCurrentDate: (d: Date) => void
@@ -1008,10 +1448,24 @@ function CalendarSection({
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekDays = [...Array(7)].map((_, i) => addDays(weekStart, i));
 
+  const toggleBlockSlot = async (proId: string, time: string) => {
+    const existing = blockedSlots.find(bs => bs.date === dateStr && bs.time === time && bs.professionalId === proId);
+    if (existing) {
+      await deleteDoc(doc(db, 'blocked_slots', existing.id));
+    } else {
+      await addDoc(collection(db, 'blocked_slots'), {
+        date: dateStr,
+        time,
+        professionalId: proId
+      });
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <div className="lg:col-span-1 space-y-6">
         <div className="bg-white p-6 rounded-2xl border border-brand-border shadow-sm">
+          {/* Calendar picker */}
           <div className="flex items-center justify-between mb-6">
             <button onClick={() => setCurrentDate(addDays(currentDate, -7))} className="p-2 hover:bg-brand-bg rounded-lg transition-all"><ChevronLeft size={18} /></button>
             <span className="text-xs font-bold uppercase tracking-widest">{format(currentDate, 'MMMM yyyy', { locale: ptBR })}</span>
@@ -1022,19 +1476,19 @@ function CalendarSection({
               <div key={d} className="text-[10px] font-extrabold text-brand-text-muted">{d}</div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 text-[10px]">
             {weekDays.map(day => (
               <button 
                 key={day.toISOString()}
                 onClick={() => setCurrentDate(day)}
                 className={cn(
-                  "aspect-square flex flex-col items-center justify-center rounded-lg text-xs font-bold transition-all relative",
+                  "aspect-square flex flex-col items-center justify-center rounded-lg font-bold transition-all relative",
                   isSameDay(day, currentDate) ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20 scale-110" : "hover:bg-brand-bg text-brand-text-dark",
                   isSameDay(day, new Date()) && !isSameDay(day, currentDate) && "text-brand-primary underline"
                 )}
               >
                 {format(day, 'd')}
-                {appointments.some(a => a.date === format(day, 'yyyy-MM-dd')) && !isSameDay(day, currentDate) && (
+                {(appointments.some(a => a.date === format(day, 'yyyy-MM-dd')) || blockedSlots.some(b => b.date === format(day, 'yyyy-MM-dd'))) && !isSameDay(day, currentDate) && (
                   <div className="absolute bottom-1 w-1 h-1 bg-brand-primary rounded-full" />
                 )}
               </button>
@@ -1043,83 +1497,104 @@ function CalendarSection({
         </div>
         
         <div className="bg-white p-6 rounded-2xl border border-brand-border shadow-sm">
-          <h4 className="text-[10px] font-extrabold uppercase tracking-[2px] mb-4 text-brand-text-muted">Legenda</h4>
+          <h4 className="text-[10px] font-extrabold uppercase tracking-[2px] mb-4 text-brand-text-muted">Gestão de Horários</h4>
+          <p className="text-[10px] text-brand-text-muted mb-4 italic leading-relaxed">
+            Clique nos horários à direita para bloquear/desbloquear. Horários bloqueados não aparecerão para clientes.
+          </p>
           <div className="space-y-3">
             <div className="flex items-center gap-3 text-xs font-medium"><div className="w-2 h-2 rounded-full bg-blue-500" /> Agendado</div>
             <div className="flex items-center gap-3 text-xs font-medium"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Concluído</div>
-            <div className="flex items-center gap-3 text-xs font-medium"><div className="w-2 h-2 rounded-full bg-red-500" /> Cancelado</div>
+            <div className="flex items-center gap-3 text-xs font-medium"><div className="w-3 h-3 border border-brand-primary rounded-sm flex items-center justify-center"><Clock size={8} /></div> Bloqueado Manual</div>
           </div>
         </div>
       </div>
 
-      <div className="lg:col-span-3 space-y-4">
-        <div className="flex justify-between items-center mb-2">
-           <h3 className="font-bold text-xl tracking-tight">Horários de {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</h3>
-           <div className="text-[10px] font-extrabold uppercase tracking-widest bg-brand-bg px-3 py-1 rounded-full border border-brand-border">
-             {dayAppts.length} Atendimentos
+      <div className="lg:col-span-3 space-y-8">
+        <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-brand-border shadow-sm">
+           <div>
+             <h3 className="font-bold text-xl tracking-tight">Grade de Atendimento</h3>
+             <p className="text-xs text-brand-text-muted mt-1">{format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
+           </div>
+           <div className="text-[10px] font-extrabold uppercase tracking-widest bg-brand-bg px-4 py-2 rounded-xl border border-brand-border">
+             {dayAppts.length} Agendamentos App
            </div>
         </div>
 
-        {dayAppts.length === 0 ? (
-          <div className="bg-white p-20 rounded-3xl border-2 border-dashed border-brand-border text-center">
-            <div className="w-16 h-16 bg-brand-bg rounded-2xl flex items-center justify-center mx-auto mb-4 text-brand-text-muted opacity-20">
-              <Calendar size={32} />
-            </div>
-            <p className="text-sm font-medium text-brand-text-muted">Nenhum agendamento encontrado para esta data.</p>
-          </div>
-        ) : (
-          dayAppts.map(appt => {
-            const s = services.find(sv => sv.id === appt.serviceId);
+        {/* View grid by professional */}
+        <div className="space-y-8">
+          {professionals.map(pro => {
+            const proAppts = dayAppts.filter(a => a.professionalId === pro.id);
             return (
-              <div key={appt.id} className="bg-white p-6 rounded-2xl border border-brand-border shadow-sm flex items-center justify-between group hover:border-brand-primary/30 transition-all">
-                <div className="flex items-center gap-8">
-                  <div className="min-w-[60px] text-center">
-                    <div className="text-xl font-bold text-brand-primary tracking-tighter">{appt.time}</div>
-                    <div className="text-[9px] font-extrabold uppercase tracking-widest text-brand-text-muted">Horário</div>
-                  </div>
-                  <div className="h-10 w-px bg-brand-border" />
+              <div key={pro.id} className="bg-white rounded-3xl border border-brand-border shadow-sm overflow-hidden">
+                <div className="bg-brand-bg/50 p-4 border-b border-brand-border flex items-center gap-4">
+                  <img src={pro.photoUrl} className="w-10 h-10 rounded-xl object-cover" alt={pro.name} />
                   <div>
-                    <h4 className="font-bold text-lg text-brand-text-dark">{appt.customerName}</h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-extrabold uppercase tracking-[1px] text-brand-text-muted">{s?.name || 'Serviço'}</span>
-                      <span className="text-brand-primary font-bold text-xs tracking-tighter">{s?.price}</span>
+                    <h4 className="font-bold text-brand-text-dark text-sm">{pro.name}</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {pro.serviceIds?.map(sid => {
+                        const s = services.find(sv => sv.id === sid);
+                        return s ? <span key={sid} className="text-[8px] bg-brand-secondary px-1.5 py-0.5 rounded text-brand-primary font-bold uppercase">{s.name}</span> : null;
+                      })}
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-6">
-                   <div className={cn(
-                     "px-3 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-widest",
-                     appt.status === 'scheduled' ? "bg-blue-50 text-blue-600" :
-                     appt.status === 'completed' ? "bg-emerald-50 text-emerald-600" :
-                     "bg-red-50 text-red-600"
-                   )}>
-                     {appt.status}
-                   </div>
-                   
-                   {appt.status === 'scheduled' && (
-                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => onUpdateStatus(appt.id, 'completed')}
-                          className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100"
-                          title="Finalizar"
-                        >
-                          <CheckCircle2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => onUpdateStatus(appt.id, 'cancelled')}
-                          className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100"
-                          title="Cancelar"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                     </div>
-                   )}
+                <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {config.availableHours.map(time => {
+                    const appt = proAppts.find(a => a.time === time);
+                    const isBlocked = blockedSlots.some(bs => bs.date === dateStr && bs.time === time && bs.professionalId === pro.id);
+                    
+                    return (
+                      <div 
+                        key={`${pro.id}-${time}`}
+                        className={cn(
+                          "p-3 rounded-xl border text-[10px] font-extrabold uppercase tracking-tight transition-all relative flex flex-col items-center justify-center gap-1 min-h-[60px]",
+                          appt ? (
+                            appt.status === 'completed' ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                            appt.status === 'cancelled' ? "bg-red-50 border-red-200 text-red-700" :
+                            "bg-blue-50 border-blue-200 text-blue-700 shadow-sm"
+                          ) : isBlocked ? (
+                            "bg-brand-primary text-white border-brand-primary shadow-lg shadow-brand-primary/20 cursor-pointer"
+                          ) : (
+                            "bg-white border-brand-border text-stone-500 hover:border-brand-primary/30 cursor-pointer"
+                          )
+                        )}
+                        onClick={() => !appt && toggleBlockSlot(pro.id, time)}
+                      >
+                        <span className={cn("text-xs", isBlocked ? "text-white" : "text-brand-text-dark")}>{time}</span>
+                        {appt ? (
+                          <span className="opacity-70 truncate max-w-full">{appt.customerName}</span>
+                        ) : isBlocked ? (
+                          <span className="flex items-center gap-1"><Clock size={10} /> BLOQUEADO</span>
+                        ) : (
+                          <span className="opacity-0 group-hover:opacity-100">Disponível</span>
+                        )}
+                        
+                        {appt && appt.status === 'scheduled' && (
+                          <div className="absolute -top-2 -right-2 flex gap-1 z-10">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onUpdateStatus(appt.id, 'completed'); }}
+                              className="w-7 h-7 bg-white shadow-xl border border-emerald-200 rounded-full flex items-center justify-center text-emerald-500 hover:scale-110 transition-transform"
+                              title="Concluir"
+                            >
+                              <CheckCircle2 size={14} />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onUpdateStatus(appt.id, 'cancelled'); }}
+                              className="w-7 h-7 bg-white shadow-xl border border-red-200 rounded-full flex items-center justify-center text-red-500 hover:scale-110 transition-transform"
+                              title="Cancelar"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
-          })
-        )}
+          })}
+        </div>
       </div>
     </div>
   );

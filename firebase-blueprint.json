@@ -33,13 +33,70 @@
       "properties": {
         "customerName": { "type": "string", "description": "Nome do cliente." },
         "serviceId": { "type": "string", "description": "ID do serviço agendado." },
+        "serviceName": { "type": "string", "description": "Nome do serviço para exibição." },
+        "professionalId": { "type": "string", "description": "ID do profissional selecionado." },
+        "professionalName": { "type": "string", "description": "Nome do profissional para exibição." },
         "date": { "type": "string", "description": "Data do agendamento (YYYY-MM-DD)." },
         "time": { "type": "string", "description": "Horário do agendamento (HH:MM)." },
         "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"], "description": "Status do agendamento." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Data de criação do registro." },
         "uid": { "type": "string", "description": "ID do usuário que realizou o agendamento." }
       },
-      "required": ["customerName", "serviceId", "date", "time", "status", "createdAt", "uid"]
+      "required": ["customerName", "serviceId", "professionalId", "date", "time", "status", "createdAt", "uid"]
+    },
+    "Professional": {
+      "title": "Professional",
+      "description": "Funcionário do salão.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome do profissional." },
+        "photoUrl": { "type": "string", "format": "uri", "description": "URL da foto do profissional." },
+        "serviceIds": { "type": "array", "items": { "type": "string" }, "description": "IDs dos serviços que este profissional realiza." }
+      },
+      "required": ["name", "photoUrl", "serviceIds"]
+    },
+    "SalonInfo": {
+      "title": "Salon Info",
+      "description": "Informações de contato e redes sociais do salão.",
+      "type": "object",
+      "properties": {
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "instagram": { "type": "string" }
+      },
+      "required": ["address", "phone", "instagram"]
+    },
+    "OccupiedSlot": {
+      "title": "Occupied Slot",
+      "description": "Metadados públicos de um agendamento para controle de disponibilidade.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "professionalId": { "type": "string" },
+        "appointmentId": { "type": "string" }
+      },
+      "required": ["date", "time", "professionalId", "appointmentId"]
+    },
+    "BlockedSlot": {
+      "title": "Blocked Slot",
+      "description": "Horário bloqueado manualmente pelo admin.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "Data (YYYY-MM-DD)." },
+        "time": { "type": "string", "description": "Horário (HH:MM)." },
+        "professionalId": { "type": "string", "description": "ID do profissional." }
+      },
+      "required": ["date", "time", "professionalId"]
+    },
+    "AppConfig": {
+      "title": "App Configuration",
+      "description": "Configurações de horários e dias de funcionamento.",
+      "type": "object",
+      "properties": {
+        "availableDays": { "type": "array", "items": { "type": "number" }, "description": "Dias da semana (0-6)." },
+        "availableHours": { "type": "array", "items": { "type": "string" }, "description": "Lista de horários (HH:MM)." }
+      }
     }
   },
   "firestore": {
@@ -51,9 +108,17 @@
       "schema": "Service",
       "description": "Lista de serviços oferecidos."
     },
+    "/professionals/{proId}": {
+      "schema": "Professional",
+      "description": "Lista de profissionais do salão."
+    },
     "/appointments/{appointmentId}": {
       "schema": "Appointment",
       "description": "Registros de agendamentos."
+    },
+    "/settings/availability": {
+      "schema": "AppConfig",
+      "description": "Configuração global de horários."
     }
   }
 }

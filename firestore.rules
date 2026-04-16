@@ -26,6 +26,26 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /professionals/{proId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /blocked_slots/{slotId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /occupied_slots/{slotId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
