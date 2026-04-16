@@ -207,6 +207,7 @@ export default function App() {
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
   const [occupiedSlots, setOccupiedSlots] = useState<OccupiedSlot[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLandingOpen, setIsLandingOpen] = useState(true);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -501,6 +502,14 @@ export default function App() {
         <div className="min-h-screen flex items-center justify-center bg-brand-bg">
           <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
         </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (!user && isLandingOpen) {
+    return (
+      <ErrorBoundary>
+        <LandingPage onEnter={() => setIsLandingOpen(false)} salonInfo={salonInfo} services={services} />
       </ErrorBoundary>
     );
   }
@@ -1700,6 +1709,202 @@ function DashboardStat({ title, value, subtitle, icon }: { title: string, value:
         <p className="text-3xl font-bold text-brand-text-dark tracking-tighter">{value}</p>
         <p className="text-[10px] text-brand-text-muted mt-2 font-medium opacity-70 italic">{subtitle}</p>
       </div>
+    </div>
+  );
+}
+
+function LandingPage({ onEnter, salonInfo, services }: { onEnter: () => void, salonInfo: SalonInfo, services: Service[] }) {
+  const testimonials = [
+    { name: "Mariana Silva", comment: "O melhor atendimento que já tive! A facilidade de agendar pelo site mudou minha rotina.", rating: 5, avatar: "https://i.pravatar.cc/150?u=mariana" },
+    { name: "Ricardo Oliveira", comment: "Ambiente impecável e profissionais excelentes. Recomendo o corte degradê!", rating: 5, avatar: "https://i.pravatar.cc/150?u=ricardo" },
+    { name: "Ana Beatriz", comment: "Fiz as unhas e amei o resultado. O sistema de agendamento é muito intuitivo.", rating: 5, avatar: "https://i.pravatar.cc/150?u=ana" }
+  ];
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Hero Section */}
+      <header className="relative h-[80vh] overflow-hidden">
+        <div className="absolute inset-0">
+          <img 
+            src="https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=1920" 
+            className="w-full h-full object-cover" 
+            alt="Salon Hero"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+        
+        <div className="relative h-full max-w-7xl mx-auto px-4 flex flex-col items-center justify-center text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="space-y-6"
+          >
+            <div className="inline-flex items-center gap-2 bg-brand-primary/20 backdrop-blur-md px-4 py-2 rounded-full text-white text-xs font-bold uppercase tracking-widest border border-white/20">
+              <Sparkles size={14} className="text-brand-secondary" />
+              Sua beleza em primeiro lugar
+            </div>
+            <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tighter max-w-4xl">
+              Transforme seu Estilo no <span className="text-brand-secondary">Agenda Fácil</span>
+            </h1>
+            <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto font-medium">
+              Agende seus serviços favoritos com os melhores profissionais da região em poucos cliques.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+              <button 
+                onClick={onEnter}
+                className="bg-brand-primary text-white px-10 py-5 rounded-2xl text-sm font-bold uppercase tracking-[2px] transition-all hover:scale-105 shadow-xl shadow-brand-primary/30"
+              >
+                Agendar Agora
+              </button>
+              <button className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-10 py-5 rounded-2xl text-sm font-bold uppercase tracking-[2px] transition-all hover:bg-white hover:text-brand-text-dark">
+                Ver Serviços
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </header>
+
+      {/* Gallery/Features Section */}
+      <section className="py-24 bg-brand-bg">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-3xl md:text-4xl font-bold text-brand-text-dark tracking-tight">Nossos Serviços</h2>
+            <div className="w-20 h-1 bg-brand-primary mx-auto rounded-full" />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {services.slice(0, 6).map((s, i) => (
+              <motion.div 
+                key={s.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.1 }}
+                className="group relative h-80 rounded-3xl overflow-hidden shadow-lg"
+              >
+                <img 
+                  src={s.photoUrl || `https://picsum.photos/seed/${s.name}/600/800`} 
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                  alt={s.name}
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 p-6 text-white">
+                  <h4 className="text-xl font-bold mb-1">{s.name}</h4>
+                  <p className="text-brand-secondary text-sm font-bold">{s.price}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Experience Section */}
+      <section className="py-24 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="space-y-8">
+            <h2 className="text-4xl md:text-5xl font-bold text-brand-text-dark tracking-tighter leading-tight">
+              Uma experência completa de <br />
+              <span className="text-brand-primary">Autocuidado e Bem-estar</span>
+            </h2>
+            <p className="text-lg text-brand-text-muted leading-relaxed">
+              No Agenda Fácil, unimos técnica, tendências e um atendimento personalizado para garantir que você saia com a melhor versão de si mesmo. Nossos profissionais são especialistas em transformar desejos em realidade.
+            </p>
+            <div className="grid grid-cols-2 gap-8 pt-4">
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-brand-primary">100%</div>
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted">Satisfação</p>
+              </div>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-brand-primary">+2k</div>
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted">Clientes Felizes</p>
+              </div>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="grid grid-cols-2 gap-4">
+              <img 
+                src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=400" 
+                className="rounded-2xl shadow-xl mt-12" 
+                alt="Salon Detail 1"
+                referrerPolicy="no-referrer"
+              />
+              <img 
+                src="https://images.unsplash.com/photo-1633681926022-84c23e8cb2d6?auto=format&fit=crop&q=80&w=400" 
+                className="rounded-2xl shadow-xl" 
+                alt="Salon Detail 2"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="py-24 bg-brand-bg">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-brand-text-dark tracking-tight">O que nossos clientes dizem</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {testimonials.map((t, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                className="bg-white p-8 rounded-3xl shadow-sm border border-brand-border space-y-6"
+              >
+                <div className="flex gap-1 text-yellow-400">
+                  {[...Array(t.rating)].map((_, j) => <Sparkles size={16} key={j} />)}
+                </div>
+                <p className="text-brand-text-dark font-medium italic">"{t.comment}"</p>
+                <div className="flex items-center gap-4 pt-4">
+                  <img src={t.avatar} className="w-12 h-12 rounded-full border-2 border-brand-secondary" alt={t.name} />
+                  <div>
+                    <h5 className="font-bold text-brand-text-dark text-sm">{t.name}</h5>
+                    <p className="text-[10px] text-brand-text-muted uppercase font-bold tracking-widest">Cliente Verificado</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Call to Action */}
+      <section className="py-24 bg-brand-primary relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/10 to-transparent opacity-50" />
+        <div className="relative max-w-4xl mx-auto px-4 text-center space-y-8">
+          <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tighter">Pronto para realçar sua beleza?</h2>
+          <p className="text-white/80 text-lg">Nosso time está esperando por você. Reserve seu horário agora mesmo.</p>
+          <button 
+            onClick={onEnter}
+            className="bg-white text-brand-primary px-12 py-6 rounded-2xl text-sm font-extrabold uppercase tracking-[4px] hover:scale-105 transition-all shadow-2xl shadow-black/20"
+          >
+            Acessar Plataforma
+          </button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 bg-white border-t border-brand-border text-center">
+        <div className="max-w-7xl mx-auto px-4 space-y-6">
+          <div className="flex items-center justify-center gap-2 text-brand-primary font-bold text-xl tracking-tighter">
+            <Scissors size={24} /> Agenda Fácil
+          </div>
+          <p className="text-brand-text-muted text-sm max-w-md mx-auto">
+            {salonInfo.address} • {salonInfo.phone}
+          </p>
+          <div className="flex justify-center gap-4 text-brand-text-muted">
+             <a href={`https://instagram.com/${salonInfo.instagram.replace('@','')}`} target="_blank" className="hover:text-brand-primary"><Instagram size={20} /></a>
+          </div>
+          <div className="pt-8 text-[10px] text-brand-text-muted uppercase font-bold tracking-widest opacity-50">
+            &copy; 2026 Agenda Fácil. Todos os direitos reservados.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
