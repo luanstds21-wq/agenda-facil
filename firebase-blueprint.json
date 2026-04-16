@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Informações do perfil do usuário.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "ID único do usuário no Firebase Auth." },
+        "displayName": { "type": "string", "description": "Nome de exibição do usuário." },
+        "email": { "type": "string", "format": "email", "description": "Endereço de e-mail do usuário." },
+        "role": { "type": "string", "enum": ["admin", "client"], "description": "Papel do usuário no sistema." },
+        "photoURL": { "type": "string", "format": "uri", "description": "URL da foto de perfil." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Serviço oferecido pelo salão.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome do serviço." },
+        "price": { "type": "string", "description": "Preço formatado." },
+        "duration": { "type": "string", "description": "Duração estimada." },
+        "description": { "type": "string", "description": "Descrição detalhada." },
+        "photoUrl": { "type": "string", "format": "uri", "description": "URL da imagem de capa." }
+      },
+      "required": ["name", "price", "duration"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Agendamento de serviço.",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "description": "Nome do cliente." },
+        "serviceId": { "type": "string", "description": "ID do serviço agendado." },
+        "date": { "type": "string", "description": "Data do agendamento (YYYY-MM-DD)." },
+        "time": { "type": "string", "description": "Horário do agendamento (HH:MM)." },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"], "description": "Status do agendamento." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Data de criação do registro." },
+        "uid": { "type": "string", "description": "ID do usuário que realizou o agendamento." }
+      },
+      "required": ["customerName", "serviceId", "date", "time", "status", "createdAt", "uid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Dados de perfil dos usuários."
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Lista de serviços oferecidos."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Registros de agendamentos."
+    }
+  }
+}
