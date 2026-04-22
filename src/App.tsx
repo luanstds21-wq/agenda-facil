@@ -353,7 +353,7 @@ export default function App() {
         
         let profile: UserProfile;
         if (!userDoc.exists()) {
-          const isAdmin = user.email === 'pontelikes14@gmail.com';
+          const isAdmin = user.email === 'agendafaciladministrador@gmail.com';
           profile = {
             uid: user.uid,
             displayName: user.displayName,
@@ -365,7 +365,7 @@ export default function App() {
         } else {
           profile = userDoc.data() as UserProfile;
           // Security layer: Force admin role if email matches the hardcoded admin
-          if (user.email === 'pontelikes14@gmail.com' && profile.role !== 'admin') {
+          if (user.email === 'agendafaciladministrador@gmail.com' && profile.role !== 'admin') {
             profile.role = 'admin';
             await setDoc(userRef, { role: 'admin' }, { merge: true });
           }
@@ -411,7 +411,7 @@ export default function App() {
         
         // Finalize profile creation (already handled by onAuthStateChanged but we can force update here if needed)
         const userRef = doc(db, 'users', userCredential.user.uid);
-        const isAdmin = email === 'pontelikes14@gmail.com';
+        const isAdmin = email === 'agendafaciladministrador@gmail.com';
         await setDoc(userRef, {
           uid: userCredential.user.uid,
           displayName: displayName,
